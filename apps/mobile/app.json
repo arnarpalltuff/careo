@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "ElderLink",
+    "slug": "elderlink",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "elderlink",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elderlink.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#4F6D7A"
+      },
+      "package": "com.elderlink.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#4F6D7A"
+        }
+      ],
+      "expo-location"
+    ]
+  }
+}

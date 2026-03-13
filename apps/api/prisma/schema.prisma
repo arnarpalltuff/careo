@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ════════════ USERS ════════════
+
+model User {
+  id               String           @id @default(cuid())
+  email            String           @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String?
+  avatarUrl        String?
+  pushToken        String?
+  timezone         String           @default("America/New_York")
+  subscriptionTier SubscriptionTier @default(FREE)
+  stripeCustomerId String?          @unique
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  circleMembers  CircleMember[]
+  assignedTasks  Task[]           @relation("TaskAssignee")
+  createdTasks   Task[]           @relation("TaskCreator")
+  journalEntries JournalEntry[]
+  documents      Document[]
+  sentAlerts     EmergencyAlert[]
+  refreshTokens  RefreshToken[]
+
+  @@index([email])
+}
+
+enum SubscriptionTier {
+  FREE
+  FAMILY
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+// ════════════ CARE CIRCLES ════════════
+
+model CareCircle {
+  id             String    @id @default(cuid())
+  name           String
+  careRecipient  String
+  recipientDob   DateTime?
+  recipientPhoto String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  members      CircleMember[]
+  invites      CircleInvite[]
+  tasks        Task[]
+  medications  Medication[]
+  journal      JournalEntry[]
+  appointments Appointment[]
+  documents    Document[]
+  alerts       EmergencyAlert[]
+}
+
+model CircleMember {
+  id       String     @id @default(cuid())
+  userId   String
+  circleId String
+  role     CircleRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, circleId])
+  @@index([circleId])
+  @@index([userId])
+}
+
+enum CircleRole {
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+model CircleInvite {
+  id        String     @id @default(cuid())
+  circleId  String
+  email     String
+  role      CircleRole @default(MEMBER)
+  token     String     @unique @default(cuid())
+  expiresAt DateTime
+  accepted  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([email])
+}
+
+// ════════════ TASKS ════════════
+
+model Task {
+  id           String         @id @default(cuid())
+  circleId     String
+  title        String
+  description  String?
+  status       TaskStatus     @default(PENDING)
+  priority     TaskPriority   @default(MEDIUM)
+  dueDate      DateTime?
+  dueTime      String?
+  recurring    RecurringType?
+  assignedToId String?
+  createdById  String
+  completedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  circle     CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  assignedTo User?      @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy  User       @relation("TaskCreator", fields: [createdById], references: [id])
+
+  @@index([circleId, status])
+  @@index([assignedToId])
+  @@index([dueDate])
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RecurringType {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+// ════════════ MEDICATIONS ════════════
+
+model Medication {
+  id           String   @id @default(cuid())
+  circleId     String
+  name         String
+  dosage       String
+  frequency    String
+  instructions String?
+  prescriber   String?
+  pharmacy     String?
+  refillDate   DateTime?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  circle    CareCircle           @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  schedules MedicationSchedule[]
+  logs      MedicationLog[]
+
+  @@index([circleId, isActive])
+}
+
+model MedicationSchedule {
+  id           String @id @default(cuid())
+  medicationId String
+  time         String
+  label        String
+
+  medication Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  @@index([medicationId])
+}
+
+model MedicationLog {
+  id            String       @id @default(cuid())
+  medicationId  String
+  scheduledFor  DateTime
+  status        MedLogStatus @default(PENDING)
+  takenAt       DateTime?
+  skippedReason String?
+  loggedById    String?
+  createdAt     DateTime     @default(now())
+
+  medication Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+
+  @@index([medicationId, scheduledFor])
+  @@index([scheduledFor])
+}
+
+enum MedLogStatus {
+  PENDING
+  TAKEN
+  SKIPPED
+  MISSED
+}
+
+// ════════════ HEALTH JOURNAL ════════════
+
+model JournalEntry {
+  id        String     @id @default(cuid())
+  circleId  String
+  authorId  String
+  date      DateTime   @default(now())
+  mood      MoodLevel?
+  energy    Int?
+  pain      Int?
+  sleep     String?
+  appetite  String?
+  notes     String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  author User       @relation(fields: [authorId], references: [id])
+
+  @@index([circleId, date])
+}
+
+enum MoodLevel {
+  GREAT
+  GOOD
+  OKAY
+  LOW
+  BAD
+}
+
+// ════════════ APPOINTMENTS ════════════
+
+model Appointment {
+  id        String            @id @default(cuid())
+  circleId  String
+  title     String
+  location  String?
+  date      DateTime
+  time      String
+  duration  Int?
+  doctor    String?
+  phone     String?
+  notes     String?
+  reminder  Int               @default(60)
+  status    AppointmentStatus @default(UPCOMING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@index([circleId, date])
+}
+
+enum AppointmentStatus {
+  UPCOMING
+  COMPLETED
+  CANCELLED
+}
+
+// ════════════ DOCUMENTS ════════════
+
+model Document {
+  id           String      @id @default(cuid())
+  circleId     String
+  uploadedById String
+  name         String
+  category     DocCategory
+  s3Key        String
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime    @default(now())
+
+  circle     CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  uploadedBy User       @relation(fields: [uploadedById], references: [id])
+
+  @@index([circleId, category])
+}
+
+enum DocCategory {
+  INSURANCE
+  PRESCRIPTION
+  LEGAL
+  MEDICAL
+  ID
+  OTHER
+}
+
+// ════════════ EMERGENCY ALERTS ════════════
+
+model EmergencyAlert {
+  id        String   @id @default(cuid())
+  circleId  String
+  senderId  String
+  message   String   @default("Emergency alert triggered")
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now())
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  sender User       @relation(fields: [senderId], references: [id])
+
+  @@index([circleId, createdAt])
+}
