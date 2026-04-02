@@ -1,68 +1,76 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import * as Notifications from 'expo-notifications';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts } from 'expo-font';
+import { PlayfairDisplay_400Regular } from '@expo-google-fonts/playfair-display/400Regular';
+import { PlayfairDisplay_500Medium } from '@expo-google-fonts/playfair-display/500Medium';
+import { PlayfairDisplay_600SemiBold } from '@expo-google-fonts/playfair-display/600SemiBold';
+import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display/700Bold';
+import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
+import { Inter_500Medium } from '@expo-google-fonts/inter/500Medium';
+import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
+import { Inter_700Bold } from '@expo-google-fonts/inter/700Bold';
 import { router } from 'expo-router';
-import { useAuthStore } from '../stores/authStore';
-import { authService } from '../services/auth';
-import { Spinner } from '../components/ui/Spinner';
+import { useOnboardingStore } from '../stores/onboardingStore';
+import { useCareRecipientStore } from '../stores/careRecipientStore';
+import { addNotificationResponseListener } from '../services/notifications';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { NetworkBanner } from '../components/NetworkBanner';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const { isLoading, isAuthenticated, setAuth, setLoading, clearAuth } = useAuthStore();
+  const [ready, setReady] = useState(false);
+  const { hydrate } = useOnboardingStore();
+  const { hydrate: hydrateCareRecipient } = useCareRecipientStore();
+
+  const [fontsLoaded] = useFonts({
+    PlayfairDisplay_400Regular,
+    PlayfairDisplay_500Medium,
+    PlayfairDisplay_600SemiBold,
+    PlayfairDisplay_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
 
   useEffect(() => {
-    (async () => {
-      try {
-        const refreshToken = await useAuthStore.getState().hydrate();
-        if (refreshToken) {
-          const data = await authService.refresh(refreshToken);
-          const me = await authService.getMe();
-          await setAuth(me.user, data.accessToken, data.refreshToken);
-        } else {
-          setLoading(false);
-        }
-      } catch {
-        await clearAuth();
-      }
-    })();
-  }, []);
+    Promise.all([hydrate(), hydrateCareRecipient()]).then(() => setReady(true));
 
-  useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      registerForPush();
-    }
-  }, [isLoading, isAuthenticated]);
-
-  useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    // Handle notification tap — navigate to the right screen
+    const sub = addNotificationResponseListener((response) => {
       const data = response.notification.request.content.data;
-      if (data?.type === 'TASK_ASSIGNED' || data?.type === 'TASK_COMPLETED' || data?.type === 'TASK_DUE_TODAY') {
-        router.push(`/task/${data.taskId}`);
-      } else if (data?.type === 'EMERGENCY') {
-        router.push('/emergency');
-      } else if (data?.type === 'JOURNAL_NEW') {
-        router.push(`/journal/${data.entryId}`);
-      }
+      if (data?.type === 'medication') router.push('/(tabs)/care');
+      else if (data?.type === 'appointment') router.push('/(tabs)/calendar');
+      else if (data?.type === 'wellness') router.push('/wellness-check');
+      else if (data?.type === 'task') router.push('/(tabs)/care');
+      else if (data?.type === 'helpBoard') router.push('/help-board');
     });
     return () => sub.remove();
   }, []);
 
-  if (isLoading) {
-    return <Spinner />;
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded && ready) {
+      await SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, ready]);
+
+  if (!fontsLoaded || !ready) {
+    return null;
   }
 
   return (
-    <>
+    <ErrorBoundary>
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
       <StatusBar style="dark" />
+      <NetworkBanner />
       <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="onboarding" />
+        <Stack.Screen name="paywall" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="circle" options={{ headerShown: true, headerTitle: '' }} />
@@ -72,25 +80,22 @@ export default function RootLayout() {
         <Stack.Screen name="appointment" options={{ headerShown: true, headerTitle: '' }} />
         <Stack.Screen name="documents" options={{ headerShown: true, headerTitle: 'Documents' }} />
         <Stack.Screen name="emergency" options={{ headerShown: false }} />
+        <Stack.Screen name="health-card" options={{ headerShown: false }} />
+        <Stack.Screen name="help-board" options={{ headerShown: false }} />
+        <Stack.Screen name="wellness-check" options={{ headerShown: false }} />
+        <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
         <Stack.Screen name="subscription" options={{ headerShown: true, headerTitle: 'Subscription' }} />
+        <Stack.Screen name="invite" options={{ headerShown: true, headerTitle: '', presentation: 'modal' }} />
+        <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
+        <Stack.Screen name="edit-profile" options={{ headerShown: true, headerTitle: '' }} />
+        <Stack.Screen name="care-assistant" options={{ headerShown: false }} />
+        <Stack.Screen name="care-insights" options={{ headerShown: false }} />
+        <Stack.Screen name="vitals" options={{ headerShown: false }} />
+        <Stack.Screen name="care-timeline" options={{ headerShown: false }} />
+        <Stack.Screen name="shifts" options={{ headerShown: false }} />
+        <Stack.Screen name="symptoms" options={{ headerShown: false }} />
       </Stack>
-    </>
+    </View>
+    </ErrorBoundary>
   );
-}
-
-async function registerForPush() {
-  try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') return;
-
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
-    await authService.savePushToken(token);
-  } catch {
-    // Push not available in simulator
-  }
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../utils/colors';
+import { typography } from '../utils/fonts';
 import { Avatar } from './ui/Avatar';
 import { Badge } from './ui/Badge';
 
@@ -49,8 +50,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   name: {
-    fontSize: 15,
-    fontWeight: '500',
+    ...typography.headingSmall,
     color: colors.textPrimary,
   },
 });

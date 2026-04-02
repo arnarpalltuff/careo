@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal as RNModal, View, Text, StyleSheet, TouchableOpacity, TouchableWithoutFeedback } from 'react-native';
 import { colors } from '../../utils/colors';
+import { typography } from '../../utils/fonts';
 import { Button } from './Button';
 
 interface ModalProps {
@@ -66,15 +67,13 @@ const styles = StyleSheet.create({
     maxWidth: 360,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.headingMedium,
     color: colors.textPrimary,
     marginBottom: 8,
   },
   message: {
-    fontSize: 15,
+    ...typography.bodyMedium,
     color: colors.textSecondary,
-    lineHeight: 22,
     marginBottom: 24,
   },
   buttons: {

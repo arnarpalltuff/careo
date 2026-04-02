@@ -1,6 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { DocCategory } from '@prisma/client';
+import { DocCategory, SubscriptionTier, TIER_LIMITS } from '@careo/shared';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../types';
 
@@ -12,7 +12,7 @@ const s3 = new S3Client({
   },
 });
 
-const BUCKET = process.env.AWS_S3_BUCKET || 'elderlink-documents';
+const BUCKET = process.env.AWS_S3_BUCKET || 'careo-documents';
 
 export async function getUploadUrl(
   circleId: string,
@@ -21,13 +21,13 @@ export async function getUploadUrl(
 ) {
   // Check document limit
   const user = await prisma.user.findUnique({ where: { id: userId } });
+  const tier = (user?.subscriptionTier || 'FREE') as SubscriptionTier;
   const docCount = await prisma.document.count({ where: { circleId } });
-  const limit = user?.subscriptionTier === 'FAMILY' ? 100 : 10;
+  const limit = TIER_LIMITS[tier].docs;
   if (docCount >= limit) {
-    throw new AppError(403, 'upgrade_required', `Document limit reached. Limit: ${limit}`);
+    throw new AppError(403, 'upgrade_required', `You've reached your ${tier} plan limit of ${limit} documents. Upgrade to store more.`);
   }
 
-  const cuid = require('@prisma/client').Prisma.raw('').constructor.name; // just use Date.now for uniqueness
   const s3Key = `circles/${circleId}/documents/${Date.now()}-${data.fileName}`;
 
   const command = new PutObjectCommand({
@@ -88,6 +88,6 @@ export async function deleteDocument(docId: string, circleId: string, userId: st
     throw new AppError(403, 'forbidden', 'Only admins or the uploader can delete documents');
   }
 
-  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: doc.s3Key }));
   await prisma.document.delete({ where: { id: docId } });
+  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: doc.s3Key }));
 }

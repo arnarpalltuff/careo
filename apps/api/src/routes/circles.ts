@@ -132,4 +132,48 @@ router.delete(
   })
 );
 
+// ─── Health Card ───
+
+const healthCardSchema = z.object({
+  bloodType: z.string().optional(),
+  allergies: z.array(z.string()).optional(),
+  conditions: z.array(z.string()).optional(),
+  emergencyContacts: z.array(z.object({
+    name: z.string(),
+    phone: z.string(),
+    relation: z.string(),
+  })).optional(),
+  primaryDoctor: z.string().optional(),
+  doctorPhone: z.string().optional(),
+  pharmacy: z.string().optional(),
+  pharmacyPhone: z.string().optional(),
+  insuranceProvider: z.string().optional(),
+  insuranceId: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+router.get(
+  '/:circleId/health-card',
+  authenticate,
+  circleAccess(['ADMIN', 'MEMBER', 'VIEWER']),
+  asyncHandler(async (req, res) => {
+    const circle = await circleService.getCircleDetail(req.params.circleId);
+    const healthCard = circle.healthCard ? JSON.parse(circle.healthCard) : {};
+    res.json({ healthCard });
+  })
+);
+
+router.put(
+  '/:circleId/health-card',
+  authenticate,
+  circleAccess(['ADMIN', 'MEMBER']),
+  validate(healthCardSchema),
+  asyncHandler(async (req, res) => {
+    const circle = await circleService.updateCircle(req.params.circleId, {
+      healthCard: JSON.stringify(req.body),
+    });
+    res.json({ healthCard: JSON.parse(circle.healthCard || '{}') });
+  })
+);
+
 export default router;

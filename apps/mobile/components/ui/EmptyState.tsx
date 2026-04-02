@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '../../utils/colors';
+import { typography } from '../../utils/fonts';
 import { Button } from './Button';
 
 interface EmptyStateProps {
@@ -27,23 +28,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: 40,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
+    ...typography.headingMedium,
     color: colors.textPrimary,
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
-    fontSize: 15,
-    color: colors.textSecondary,
+    ...typography.bodyMedium,
+    color: colors.textHint,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
   },
   button: {
-    minWidth: 200,
+    minWidth: 180,
   },
 });

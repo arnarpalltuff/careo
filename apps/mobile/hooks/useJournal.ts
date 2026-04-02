@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { journalService } from '../services/journal';
 import { useCircleStore } from '../stores/circleStore';
+import { isDemoMode, DEMO_JOURNAL } from '../utils/demoData';
 
 export function useJournal() {
   const [entries, setEntries] = useState<any[]>([]);
@@ -11,6 +12,11 @@ export function useJournal() {
   const fetchEntries = useCallback(
     async (params?: { from?: string; to?: string; page?: number }) => {
       if (!activeCircleId) return;
+      if (isDemoMode()) {
+        setEntries(DEMO_JOURNAL);
+        setTotal(DEMO_JOURNAL.length);
+        return;
+      }
       setLoading(true);
       try {
         const data = await journalService.list(activeCircleId, params);

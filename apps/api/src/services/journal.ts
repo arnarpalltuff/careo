@@ -1,4 +1,4 @@
-import { MoodLevel } from '@prisma/client';
+import { MoodLevel } from '@careo/shared';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../types';
 import { notifyCircle } from './notifications';

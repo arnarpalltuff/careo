@@ -13,7 +13,12 @@ router.post(
   '/checkout',
   authenticate,
   asyncHandler(async (req, res) => {
-    const result = await subService.createCheckoutSession(req.user!.userId);
+    const tier = req.body.tier;
+    if (tier !== 'PLUS' && tier !== 'FAMILY') {
+      res.status(400).json({ message: 'tier must be PLUS or FAMILY' });
+      return;
+    }
+    const result = await subService.createCheckoutSession(req.user!.userId, tier);
     res.json(result);
   })
 );
@@ -22,12 +27,14 @@ router.post(
   '/webhook',
   asyncHandler(async (req, res) => {
     const sig = req.headers['stripe-signature'] as string;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
-    const event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET || ''
-    );
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!stripeKey || !webhookSecret) {
+      res.status(500).json({ error: 'Stripe not configured' });
+      return;
+    }
+    const stripe = new Stripe(stripeKey);
+    const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
     await subService.handleWebhook(event);
     res.json({ received: true });
   })

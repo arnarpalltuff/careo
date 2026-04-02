@@ -1,4 +1,4 @@
-import { AppointmentStatus } from '@prisma/client';
+import { AppointmentStatus } from '@careo/shared';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../types';
 

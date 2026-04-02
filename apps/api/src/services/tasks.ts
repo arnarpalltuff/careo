@@ -1,4 +1,4 @@
-import { TaskStatus, TaskPriority, RecurringType } from '@prisma/client';
+import { TaskStatus, TaskPriority, RecurringType, SubscriptionTier, TIER_LIMITS } from '@careo/shared';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../types';
 import { notifyCircle, notifyUser } from './notifications';
@@ -16,6 +16,19 @@ export async function createTask(
     assignedToId?: string;
   }
 ) {
+  // Check active task limit
+  const user = await prisma.user.findUnique({ where: { id: createdById } });
+  const tier = (user?.subscriptionTier || 'FREE') as SubscriptionTier;
+  const taskLimit = TIER_LIMITS[tier].activeTasks;
+  if (taskLimit !== Infinity) {
+    const activeCount = await prisma.task.count({
+      where: { circleId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+    });
+    if (activeCount >= taskLimit) {
+      throw new AppError(403, 'upgrade_required', `You've reached your ${tier} plan limit of ${taskLimit} active tasks. Complete or upgrade to add more.`);
+    }
+  }
+
   const task = await prisma.task.create({
     data: {
       circleId,

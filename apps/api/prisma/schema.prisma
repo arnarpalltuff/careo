@@ -3,41 +3,56 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 // ════════════ USERS ════════════
 
 model User {
-  id               String           @id @default(cuid())
-  email            String           @unique
+  id               String   @id @default(cuid())
+  email            String   @unique
   passwordHash     String
   firstName        String
   lastName         String
   phone            String?
   avatarUrl        String?
   pushToken        String?
-  timezone         String           @default("America/New_York")
-  subscriptionTier SubscriptionTier @default(FREE)
-  stripeCustomerId String?          @unique
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  timezone         String   @default("America/New_York")
+  subscriptionTier String   @default("FREE") // FREE | PLUS | FAMILY
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  circleMembers  CircleMember[]
-  assignedTasks  Task[]           @relation("TaskAssignee")
-  createdTasks   Task[]           @relation("TaskCreator")
-  journalEntries JournalEntry[]
-  documents      Document[]
-  sentAlerts     EmergencyAlert[]
-  refreshTokens  RefreshToken[]
+  circleMembers     CircleMember[]
+  assignedTasks     Task[]              @relation("TaskAssignee")
+  createdTasks      Task[]              @relation("TaskCreator")
+  journalEntries    JournalEntry[]
+  documents         Document[]
+  sentAlerts        EmergencyAlert[]
+  refreshTokens     RefreshToken[]
+  burnoutAssessments BurnoutAssessment[] @relation("BurnoutAssessments")
+  respiteReminders  RespiteReminder[]   @relation("RespiteReminders")
+  createdExpenses   Expense[]           @relation("ExpenseCreator")
+  paidExpenses      Expense[]           @relation("ExpensePayer")
+  expenseSplits     ExpenseSplit[]
+  careNotes         CareNote[]          @relation("CareNoteAuthor")
+  transitions       CareTransition[]    @relation("TransitionCreator")
+  kudosSent         Kudos[]             @relation("KudosSender")
+  kudosReceived     Kudos[]             @relation("KudosReceiver")
+  meetings          FamilyMeeting[]     @relation("MeetingOrganizer")
+  resources         Resource[]          @relation("ResourceAdder")
+  protocols         EmergencyProtocol[] @relation("ProtocolCreator")
+  language          String              @default("en") // User preferred language
+
+  // Advanced features
+  vitalReadings     VitalReading[]      @relation("VitalRecorder")
+  safeZones         SafeZone[]          @relation("SafeZoneCreator")
+  locationUpdates   LocationUpdate[]    @relation("LocationUpdater")
+  cognitiveSessions CognitiveSession[]  @relation("CognitivePlayer")
+  dailyCheckIns     DailyCheckIn[]      @relation("CheckInUser")
 
   @@index([email])
-}
-
-enum SubscriptionTier {
-  FREE
-  FAMILY
 }
 
 model RefreshToken {
@@ -71,6 +86,7 @@ model CareCircle {
   careRecipient  String
   recipientDob   DateTime?
   recipientPhoto String?
+  healthCard     String?   // JSON string with health card data (allergies, conditions, contacts, etc.)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -82,14 +98,31 @@ model CareCircle {
   appointments Appointment[]
   documents    Document[]
   alerts       EmergencyAlert[]
+  burnoutAssessments BurnoutAssessment[]
+  respiteReminders   RespiteReminder[]
+  expenses     Expense[]
+  careNotes    CareNote[]
+  transitions  CareTransition[]
+  kudos        Kudos[]
+  meetings     FamilyMeeting[]
+  resources    Resource[]
+  protocols    EmergencyProtocol[]
+
+  // Advanced features
+  vitalReadings     VitalReading[]
+  safeZones         SafeZone[]
+  locationUpdates   LocationUpdate[]
+  cognitiveSessions CognitiveSession[]
+  dailyCheckIns     DailyCheckIn[]
+  predictiveInsights PredictiveInsight[]
 }
 
 model CircleMember {
-  id       String     @id @default(cuid())
+  id       String   @id @default(cuid())
   userId   String
   circleId String
-  role     CircleRole @default(MEMBER)
-  joinedAt DateTime   @default(now())
+  role     String   @default("MEMBER") // ADMIN | MEMBER | VIEWER
+  joinedAt DateTime @default(now())
 
   user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
@@ -99,21 +132,15 @@ model CircleMember {
   @@index([userId])
 }
 
-enum CircleRole {
-  ADMIN
-  MEMBER
-  VIEWER
-}
-
 model CircleInvite {
-  id        String     @id @default(cuid())
+  id        String   @id @default(cuid())
   circleId  String
   email     String
-  role      CircleRole @default(MEMBER)
-  token     String     @unique @default(cuid())
+  role      String   @default("MEMBER") // ADMIN | MEMBER | VIEWER
+  token     String   @unique @default(cuid())
   expiresAt DateTime
-  accepted  Boolean    @default(false)
-  createdAt DateTime   @default(now())
+  accepted  Boolean  @default(false)
+  createdAt DateTime @default(now())
 
   circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
 
@@ -124,20 +151,20 @@ model CircleInvite {
 // ════════════ TASKS ════════════
 
 model Task {
-  id           String         @id @default(cuid())
+  id           String    @id @default(cuid())
   circleId     String
   title        String
   description  String?
-  status       TaskStatus     @default(PENDING)
-  priority     TaskPriority   @default(MEDIUM)
+  status       String    @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | CANCELLED
+  priority     String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
   dueDate      DateTime?
   dueTime      String?
-  recurring    RecurringType?
+  recurring    String? // DAILY | WEEKLY | BIWEEKLY | MONTHLY
   assignedToId String?
   createdById  String
   completedAt  DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   circle     CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
   assignedTo User?      @relation("TaskAssignee", fields: [assignedToId], references: [id])
@@ -148,31 +175,10 @@ model Task {
   @@index([dueDate])
 }
 
-enum TaskStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-enum TaskPriority {
-  LOW
-  MEDIUM
-  HIGH
-  URGENT
-}
-
-enum RecurringType {
-  DAILY
-  WEEKLY
-  BIWEEKLY
-  MONTHLY
-}
-
 // ════════════ MEDICATIONS ════════════
 
 model Medication {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   circleId     String
   name         String
   dosage       String
@@ -181,9 +187,9 @@ model Medication {
   prescriber   String?
   pharmacy     String?
   refillDate   DateTime?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   circle    CareCircle           @relation(fields: [circleId], references: [id], onDelete: Cascade)
   schedules MedicationSchedule[]
@@ -204,43 +210,36 @@ model MedicationSchedule {
 }
 
 model MedicationLog {
-  id            String       @id @default(cuid())
+  id            String   @id @default(cuid())
   medicationId  String
   scheduledFor  DateTime
-  status        MedLogStatus @default(PENDING)
+  status        String   @default("PENDING") // PENDING | TAKEN | SKIPPED | MISSED
   takenAt       DateTime?
   skippedReason String?
   loggedById    String?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime @default(now())
 
   medication Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
 
-  @@index([medicationId, scheduledFor])
+  @@unique([medicationId, scheduledFor])
   @@index([scheduledFor])
-}
-
-enum MedLogStatus {
-  PENDING
-  TAKEN
-  SKIPPED
-  MISSED
 }
 
 // ════════════ HEALTH JOURNAL ════════════
 
 model JournalEntry {
-  id        String     @id @default(cuid())
+  id        String   @id @default(cuid())
   circleId  String
   authorId  String
-  date      DateTime   @default(now())
-  mood      MoodLevel?
+  date      DateTime @default(now())
+  mood      String? // GREAT | GOOD | OKAY | LOW | BAD
   energy    Int?
   pain      Int?
   sleep     String?
   appetite  String?
   notes     String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
   author User       @relation(fields: [authorId], references: [id])
@@ -248,18 +247,10 @@ model JournalEntry {
   @@index([circleId, date])
 }
 
-enum MoodLevel {
-  GREAT
-  GOOD
-  OKAY
-  LOW
-  BAD
-}
-
 // ════════════ APPOINTMENTS ════════════
 
 model Appointment {
-  id        String            @id @default(cuid())
+  id        String   @id @default(cuid())
   circleId  String
   title     String
   location  String?
@@ -269,48 +260,33 @@ model Appointment {
   doctor    String?
   phone     String?
   notes     String?
-  reminder  Int               @default(60)
-  status    AppointmentStatus @default(UPCOMING)
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  reminder  Int      @default(60)
+  status    String   @default("UPCOMING") // UPCOMING | COMPLETED | CANCELLED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
 
   @@index([circleId, date])
 }
 
-enum AppointmentStatus {
-  UPCOMING
-  COMPLETED
-  CANCELLED
-}
-
 // ════════════ DOCUMENTS ════════════
 
 model Document {
-  id           String      @id @default(cuid())
+  id           String   @id @default(cuid())
   circleId     String
   uploadedById String
   name         String
-  category     DocCategory
+  category     String // INSURANCE | PRESCRIPTION | LEGAL | MEDICAL | ID | OTHER
   s3Key        String
   mimeType     String
   sizeBytes    Int
-  createdAt    DateTime    @default(now())
+  createdAt    DateTime @default(now())
 
   circle     CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
   uploadedBy User       @relation(fields: [uploadedById], references: [id])
 
   @@index([circleId, category])
-}
-
-enum DocCategory {
-  INSURANCE
-  PRESCRIPTION
-  LEGAL
-  MEDICAL
-  ID
-  OTHER
 }
 
 // ════════════ EMERGENCY ALERTS ════════════
@@ -328,4 +304,336 @@ model EmergencyAlert {
   sender User       @relation(fields: [senderId], references: [id])
 
   @@index([circleId, createdAt])
+}
+
+// ════════════ CAREGIVER BURNOUT & WELLNESS ════════════
+
+model BurnoutAssessment {
+  id           String   @id @default(cuid())
+  userId       String
+  circleId     String
+  // Scores 1-10 for each dimension
+  emotional    Int      // Emotional exhaustion
+  physical     Int      // Physical fatigue
+  social       Int      // Social isolation
+  workload     Int      // Workload overwhelm
+  sleep        Int      // Sleep quality (inverted: 10=great, 1=terrible)
+  selfCare     Int      // Self-care frequency (inverted)
+  overallScore Float    // Computed weighted average
+  riskLevel    String   // LOW | MODERATE | HIGH | CRITICAL
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  user   User       @relation("BurnoutAssessments", fields: [userId], references: [id])
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([circleId])
+}
+
+model RespiteReminder {
+  id         String   @id @default(cuid())
+  userId     String
+  circleId   String
+  type       String   // BREAK | EXERCISE | SOCIAL | SLEEP | HOBBY
+  message    String
+  scheduledFor DateTime
+  dismissed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user   User       @relation("RespiteReminders", fields: [userId], references: [id])
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@index([userId, scheduledFor])
+}
+
+// ════════════ FINANCIAL MANAGEMENT ════════════
+
+model Expense {
+  id          String   @id @default(cuid())
+  circleId    String
+  createdById String
+  amount      Float
+  currency    String   @default("USD")
+  category    String   // MEDICAL | PHARMACY | TRANSPORT | SUPPLIES | HOME_CARE | INSURANCE | FOOD | OTHER
+  description String
+  date        DateTime
+  receipt     String?  // S3 key for receipt image
+  paidById    String?  // Who actually paid
+  taxDeductible Boolean @default(false)
+  recurring   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  circle    CareCircle    @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  createdBy User          @relation("ExpenseCreator", fields: [createdById], references: [id])
+  paidBy    User?         @relation("ExpensePayer", fields: [paidById], references: [id])
+  splits    ExpenseSplit[]
+
+  @@index([circleId, date])
+  @@index([circleId, category])
+}
+
+model ExpenseSplit {
+  id        String  @id @default(cuid())
+  expenseId String
+  userId    String
+  amount    Float
+  settled   Boolean @default(false)
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+  @@index([userId, settled])
+}
+
+// ════════════ CARE NOTES & SHIFT HANDOFFS ════════════
+
+model CareNote {
+  id        String   @id @default(cuid())
+  circleId  String
+  authorId  String
+  type      String   // SHIFT_HANDOFF | DOCTOR_VISIT | DAILY_UPDATE | INCIDENT | OBSERVATION
+  title     String
+  content   String
+  tags      String?  // Comma-separated tags
+  pinned    Boolean  @default(false)
+  voiceUrl  String?  // S3 key for voice memo
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  author User       @relation("CareNoteAuthor", fields: [authorId], references: [id])
+
+  @@index([circleId, type])
+  @@index([circleId, createdAt])
+}
+
+// ════════════ CARE TRANSITIONS ════════════
+
+model CareTransition {
+  id              String   @id @default(cuid())
+  circleId        String
+  createdById     String
+  type            String   // HOSPITAL_TO_HOME | HOME_TO_FACILITY | FACILITY_TO_HOME | HOSPICE | REHAB
+  status          String   @default("PLANNING") // PLANNING | IN_PROGRESS | COMPLETED
+  fromLocation    String?
+  toLocation      String?
+  targetDate      DateTime?
+  notes           String?
+  checklistJson   String?  // JSON array of checklist items [{id, text, done, category}]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  circle    CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  createdBy User       @relation("TransitionCreator", fields: [createdById], references: [id])
+
+  @@index([circleId, status])
+}
+
+// ════════════ GRATITUDE & RECOGNITION ════════════
+
+model Kudos {
+  id         String   @id @default(cuid())
+  circleId   String
+  fromUserId String
+  toUserId   String
+  message    String
+  emoji      String   @default("💛") // Emoji reaction
+  createdAt  DateTime @default(now())
+
+  circle   CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  fromUser User       @relation("KudosSender", fields: [fromUserId], references: [id])
+  toUser   User       @relation("KudosReceiver", fields: [toUserId], references: [id])
+
+  @@index([circleId, createdAt])
+  @@index([toUserId])
+}
+
+// ════════════ FAMILY MEETINGS ════════════
+
+model FamilyMeeting {
+  id           String   @id @default(cuid())
+  circleId     String
+  scheduledBy  String
+  title        String
+  scheduledFor DateTime
+  duration     Int      @default(30) // minutes
+  agendaJson   String?  // JSON array of agenda items [{id, topic, duration, presenter}]
+  notesJson    String?  // JSON array of meeting notes / decisions
+  status       String   @default("SCHEDULED") // SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  circle      CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  organizer   User       @relation("MeetingOrganizer", fields: [scheduledBy], references: [id])
+
+  @@index([circleId, scheduledFor])
+}
+
+// ════════════ RESOURCE LIBRARY ════════════
+
+model Resource {
+  id          String   @id @default(cuid())
+  circleId    String?  // null = global resource
+  addedById   String?
+  title       String
+  description String
+  category    String   // SUPPORT_GROUP | HOME_CARE | LEGAL | FINANCIAL | MEDICAL | RESPITE | TRANSPORT | MEAL_DELIVERY | EQUIPMENT | OTHER
+  url         String?
+  phone       String?
+  address     String?
+  isGlobal    Boolean  @default(false)
+  rating      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  circle  CareCircle? @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  addedBy User?       @relation("ResourceAdder", fields: [addedById], references: [id])
+
+  @@index([category])
+  @@index([circleId])
+}
+
+// ════════════ EMERGENCY PROTOCOLS ════════════
+
+model EmergencyProtocol {
+  id          String   @id @default(cuid())
+  circleId    String
+  createdById String
+  type        String   // FALL | CHEST_PAIN | BREATHING | SEIZURE | CONFUSION | WANDERING | MEDICATION_ERROR | CUSTOM
+  title       String
+  stepsJson   String   // JSON array of ordered steps [{order, instruction, callNumber?, notes?}]
+  contactsJson String? // JSON array of emergency contacts [{name, phone, role, order}]
+  goBagJson   String?  // JSON array of items to grab [{item, location, packed}]
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  circle    CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  createdBy User       @relation("ProtocolCreator", fields: [createdById], references: [id])
+
+  @@index([circleId, type])
+}
+
+// ════════════ VITAL SIGNS TRACKING ════════════
+
+model VitalReading {
+  id           String   @id @default(cuid())
+  circleId     String
+  recordedById String
+  type         String   // BLOOD_PRESSURE | HEART_RATE | BLOOD_GLUCOSE | WEIGHT | TEMPERATURE | OXYGEN_SATURATION
+  value        Float    // Primary value (systolic for BP)
+  value2       Float?   // Secondary value (diastolic for BP)
+  unit         String   // mmHg, bpm, mg/dL, lbs, °F, %
+  notes        String?
+  recordedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  circle     CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  recordedBy User       @relation("VitalRecorder", fields: [recordedById], references: [id])
+
+  @@index([circleId, type, recordedAt])
+  @@index([circleId, recordedAt])
+}
+
+// ════════════ GEO-FENCING & SAFE ZONES ════════════
+
+model SafeZone {
+  id            String   @id @default(cuid())
+  circleId      String
+  createdById   String
+  name          String
+  latitude      Float
+  longitude     Float
+  radiusMeters  Float    @default(200)
+  isActive      Boolean  @default(true)
+  notifyOnExit  Boolean  @default(true)
+  notifyOnEntry Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  circle    CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  createdBy User       @relation("SafeZoneCreator", fields: [createdById], references: [id])
+
+  @@index([circleId, isActive])
+}
+
+model LocationUpdate {
+  id         String   @id @default(cuid())
+  circleId   String
+  userId     String
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  battery    Float?
+  recordedAt DateTime @default(now())
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user   User       @relation("LocationUpdater", fields: [userId], references: [id])
+
+  @@index([circleId, userId, recordedAt])
+  @@index([userId, recordedAt])
+}
+
+// ════════════ COGNITIVE EXERCISES ════════════
+
+model CognitiveSession {
+  id              String   @id @default(cuid())
+  circleId        String
+  userId          String
+  exerciseType    String   // MEMORY | ATTENTION | LANGUAGE | PROBLEM_SOLVING | PROCESSING_SPEED
+  exerciseTitle   String
+  difficulty      String   // EASY | MEDIUM | HARD
+  score           Int
+  accuracy        Float    // 0-100%
+  durationSeconds Int
+  completedAt     DateTime @default(now())
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user   User       @relation("CognitivePlayer", fields: [userId], references: [id])
+
+  @@index([circleId, userId, completedAt])
+  @@index([userId, exerciseType])
+}
+
+// ════════════ DAILY SAFETY CHECK-INS ════════════
+
+model DailyCheckIn {
+  id           String    @id @default(cuid())
+  circleId     String
+  userId       String
+  status       String    @default("PENDING") // PENDING | OK | NEEDS_HELP | MISSED
+  notes        String?
+  scheduledFor DateTime
+  respondedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user   User       @relation("CheckInUser", fields: [userId], references: [id])
+
+  @@unique([circleId, userId, scheduledFor])
+  @@index([circleId, scheduledFor])
+  @@index([userId, status])
+}
+
+// ════════════ PREDICTIVE HEALTH INSIGHTS ════════════
+
+model PredictiveInsight {
+  id             String   @id @default(cuid())
+  circleId       String
+  type           String   // TREND_ALERT | ANOMALY | RISK_PREDICTION | RECOMMENDATION
+  priority       String   // INFO | WARNING | URGENT
+  title          String
+  description    String
+  dataPoints     String?  // JSON evidence
+  recommendation String
+  acknowledged   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  circle CareCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@index([circleId, acknowledged])
+  @@index([circleId, priority])
 }

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { appointmentService } from '../services/appointments';
 import { useCircleStore } from '../stores/circleStore';
+import { isDemoMode, DEMO_APPOINTMENTS } from '../utils/demoData';
 
 export function useAppointments() {
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -10,6 +11,10 @@ export function useAppointments() {
   const fetchAppointments = useCallback(
     async (params?: { from?: string; to?: string; status?: string }) => {
       if (!activeCircleId) return;
+      if (isDemoMode()) {
+        setAppointments(DEMO_APPOINTMENTS);
+        return;
+      }
       setLoading(true);
       try {
         const data = await appointmentService.list(activeCircleId, params);

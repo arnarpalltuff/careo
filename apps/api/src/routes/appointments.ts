@@ -16,11 +16,11 @@ const createApptSchema = z.object({
   location: z.string().optional(),
   date: z.string(),
   time: z.string(),
-  duration: z.number().optional(),
+  duration: z.number().positive().optional(),
   doctor: z.string().optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
-  reminder: z.number().optional(),
+  reminder: z.number().positive().optional(),
 });
 
 const updateApptSchema = z.object({
@@ -28,11 +28,11 @@ const updateApptSchema = z.object({
   location: z.string().optional(),
   date: z.string().optional(),
   time: z.string().optional(),
-  duration: z.number().optional(),
+  duration: z.number().positive().optional(),
   doctor: z.string().optional(),
   phone: z.string().optional(),
   notes: z.string().optional(),
-  reminder: z.number().optional(),
+  reminder: z.number().positive().optional(),
   status: z.enum(['UPCOMING', 'COMPLETED', 'CANCELLED']).optional(),
 });
 

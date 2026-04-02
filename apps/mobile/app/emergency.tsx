@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, FlatList, Alert, Platform, Linking } from 'react-native';
 import { Stack } from 'expo-router';
-import * as Haptics from 'expo-haptics';
-import * as Location from 'expo-location';
 import { colors } from '../utils/colors';
+import { typography } from '../utils/fonts';
 import { useCircleStore } from '../stores/circleStore';
 import { formatRelative } from '../utils/formatDate';
 import { Avatar } from '../components/ui/Avatar';
@@ -27,7 +26,9 @@ export default function EmergencyScreen() {
     try {
       const { data } = await api.get(`/circles/${activeCircleId}/emergency`);
       setAlerts(data.alerts);
-    } catch {}
+    } catch {
+      // Silently fail on load — alerts will show empty state
+    }
   };
 
   const handleSend = async () => {
@@ -36,21 +37,31 @@ export default function EmergencyScreen() {
     try {
       let latitude: number | undefined;
       let longitude: number | undefined;
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({});
-          latitude = loc.coords.latitude;
-          longitude = loc.coords.longitude;
-        }
-      } catch {}
+      if (Platform.OS !== 'web') {
+        try {
+          const Location = require('expo-location');
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({});
+            latitude = loc.coords.latitude;
+            longitude = loc.coords.longitude;
+          }
+        } catch {}
+      }
 
       await api.post(`/circles/${activeCircleId}/emergency`, { latitude, longitude });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Platform.OS !== 'web') {
+        const Haptics = require('expo-haptics');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
       setSent(true);
       loadAlerts();
     } catch {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (Platform.OS !== 'web') {
+        const Haptics = require('expo-haptics');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      Alert.alert('Error', 'Failed to send emergency alert. Please try again or call 911 directly.');
     } finally {
       setLoading(false);
       setShowModal(false);
@@ -75,10 +86,15 @@ export default function EmergencyScreen() {
               <TouchableOpacity
                 style={styles.alertButton}
                 onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  if (Platform.OS !== 'web') {
+                    const Haptics = require('expo-haptics');
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  }
                   setShowModal(true);
                 }}
                 activeOpacity={0.8}
+                accessibilityLabel="Send emergency alert"
+                accessibilityRole="button"
               >
                 <Text style={styles.alertIcon}>!</Text>
               </TouchableOpacity>
@@ -88,6 +104,34 @@ export default function EmergencyScreen() {
               </Text>
             </>
           )}
+        </View>
+
+        {/* Quick call buttons */}
+        <View style={styles.callSection}>
+          <TouchableOpacity
+            style={styles.callBtn}
+            onPress={() => Linking.openURL('tel:911')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.callEmoji}>📞</Text>
+            <Text style={styles.callLabel}>Call 911</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.callBtn}
+            onPress={() => Linking.openURL('tel:988')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.callEmoji}>🆘</Text>
+            <Text style={styles.callLabel}>Crisis Line (988)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.callBtn}
+            onPress={() => Linking.openURL('tel:211')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.callEmoji}>ℹ️</Text>
+            <Text style={styles.callLabel}>Social Services (211)</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.historySection}>
@@ -140,17 +184,35 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   alertIcon: { color: '#fff', fontSize: 56, fontWeight: '800' },
-  alertLabel: { fontSize: 20, fontWeight: '700', color: colors.danger, marginTop: 20 },
-  alertDesc: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 22 },
+  alertLabel: { ...typography.headingLarge, color: colors.danger, marginTop: 20 },
+  alertDesc: { ...typography.bodyMedium, color: colors.textSecondary, textAlign: 'center', marginTop: 8 },
   sentIcon: { fontSize: 64, color: colors.success, marginBottom: 16 },
-  sentText: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
+  sentText: { ...typography.headingMedium, color: colors.textPrimary },
   resetBtn: { marginTop: 24 },
-  resetText: { fontSize: 16, color: colors.primary, fontWeight: '600' },
+  resetText: { ...typography.button, color: colors.primary },
+  callSection: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 10,
+    marginBottom: 20,
+  },
+  callBtn: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  callEmoji: { fontSize: 22, marginBottom: 4 },
+  callLabel: { ...typography.labelSmall, color: colors.textSecondary, textAlign: 'center' },
+
   historySection: { flex: 1, paddingHorizontal: 16 },
-  historyTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
+  historyTitle: { ...typography.headingMedium, color: colors.textPrimary, marginBottom: 12 },
   alertRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.divider },
   alertInfo: { flex: 1 },
-  alertSender: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
-  alertTime: { fontSize: 13, color: colors.textHint, marginTop: 2 },
-  emptyText: { fontSize: 14, color: colors.textHint, textAlign: 'center', paddingVertical: 24 },
+  alertSender: { ...typography.headingSmall, color: colors.textPrimary },
+  alertTime: { ...typography.bodySmall, color: colors.textHint, marginTop: 2 },
+  emptyText: { ...typography.labelMedium, color: colors.textHint, textAlign: 'center', paddingVertical: 24 },
 });

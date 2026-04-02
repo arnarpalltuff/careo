@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { medicationService } from '../services/medications';
 import { useCircleStore } from '../stores/circleStore';
+import { isDemoMode, DEMO_MEDICATIONS } from '../utils/demoData';
 
 export function useMedications() {
   const [medications, setMedications] = useState<any[]>([]);
@@ -9,6 +10,10 @@ export function useMedications() {
 
   const fetchMedications = useCallback(async () => {
     if (!activeCircleId) return;
+    if (isDemoMode()) {
+      setMedications(DEMO_MEDICATIONS);
+      return;
+    }
     setLoading(true);
     try {
       const data = await medicationService.list(activeCircleId, true);

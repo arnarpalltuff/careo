@@ -1,12 +1,23 @@
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import { authService } from '../services/auth';
 import { router } from 'expo-router';
+import { isDemoMode } from '../utils/demoData';
 
 export function useAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { setAuth, clearAuth } = useAuthStore();
+
+  const navigateAfterAuth = () => {
+    const { hasSeenPaywall } = useOnboardingStore.getState();
+    if (!hasSeenPaywall) {
+      router.replace('/paywall');
+    } else {
+      router.replace('/(tabs)/home');
+    }
+  };
 
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -14,9 +25,13 @@ export function useAuth() {
     try {
       const data = await authService.login({ email, password });
       await setAuth(data.user, data.accessToken, data.refreshToken);
-      router.replace('/(tabs)/home');
+      navigateAfterAuth();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      if (err.code === 'ERR_NETWORK') {
+        setError('Cannot reach server. Please check your connection.');
+      } else {
+        setError(err.response?.data?.message || 'Invalid email or password');
+      }
     } finally {
       setLoading(false);
     }
@@ -28,23 +43,29 @@ export function useAuth() {
     try {
       const data = await authService.register(form);
       await setAuth(data.user, data.accessToken, data.refreshToken);
-      router.replace('/(tabs)/home');
+      navigateAfterAuth();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed');
+      if (err.code === 'ERR_NETWORK') {
+        setError('Cannot reach server. Please check your connection.');
+      } else {
+        setError(err.response?.data?.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const logout = async () => {
-    try {
-      const { hydrate } = useAuthStore.getState();
-      const refreshToken = await hydrate();
-      if (refreshToken) {
-        await authService.logout(refreshToken);
+    if (!isDemoMode()) {
+      try {
+        const { hydrate } = useAuthStore.getState();
+        const refreshToken = await hydrate();
+        if (refreshToken) {
+          await authService.logout(refreshToken);
+        }
+      } catch {
+        // Ignore logout errors
       }
-    } catch {
-      // Ignore logout errors
     }
     await clearAuth();
     router.replace('/(auth)/login');

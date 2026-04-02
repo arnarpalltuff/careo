@@ -73,6 +73,7 @@ router.post(
 
 router.post(
   '/refresh',
+  authLimiter,
   validate(refreshSchema),
   asyncHandler(async (req, res) => {
     const result = await authService.refreshTokens(req.body.refreshToken);
@@ -85,7 +86,7 @@ router.post(
   authenticate,
   validate(refreshSchema),
   asyncHandler(async (req, res) => {
-    await authService.logoutUser(req.body.refreshToken);
+    await authService.logoutUser(req.body.refreshToken, req.user!.userId);
     res.json({ message: 'Logged out successfully' });
   })
 );

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { colors } from '../utils/colors';
+import { typography } from '../utils/fonts';
 import { ConfirmModal } from './ui/Modal';
 
 interface EmergencyFABProps {
@@ -15,7 +15,10 @@ export function EmergencyFAB({ circleName, memberCount, onAlert }: EmergencyFABP
   const [loading, setLoading] = useState(false);
 
   const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (Platform.OS !== 'web') {
+      const Haptics = require('expo-haptics');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }
     setShowModal(true);
   };
 
@@ -23,7 +26,10 @@ export function EmergencyFAB({ circleName, memberCount, onAlert }: EmergencyFABP
     setLoading(true);
     try {
       await onAlert();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Platform.OS !== 'web') {
+        const Haptics = require('expo-haptics');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     } finally {
       setLoading(false);
       setShowModal(false);
@@ -32,13 +38,13 @@ export function EmergencyFAB({ circleName, memberCount, onAlert }: EmergencyFABP
 
   return (
     <>
-      <TouchableOpacity style={styles.fab} onPress={handlePress} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.fab} onPress={handlePress} activeOpacity={0.8} accessibilityLabel="Emergency" accessibilityRole="button">
         <Text style={styles.icon}>!</Text>
       </TouchableOpacity>
       <ConfirmModal
         visible={showModal}
         title="Send Emergency Alert"
-        message={`This will immediately notify all ${memberCount} members of ${circleName}.`}
+        message={`This will notify all ${memberCount} members of ${circleName} immediately.`}
         confirmText="Send Alert"
         confirmVariant="danger"
         onCancel={() => setShowModal(false)}
@@ -54,21 +60,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 24,
     right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 54,
+    height: 54,
+    borderRadius: 18,
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.danger,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowRadius: 10,
     elevation: 6,
   },
   icon: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
   },
 });

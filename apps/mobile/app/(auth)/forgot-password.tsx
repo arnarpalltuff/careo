@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Tou
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { colors } from '../../utils/colors';
+import { typography } from '../../utils/fonts';
 import { authService } from '../../services/auth';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -16,27 +17,50 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const [codeSent, setCodeSent] = useState(false);
+
   const handleSendCode = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       await authService.forgotPassword(email);
+      setCodeSent(true);
       setStep(2);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to send code');
+      if (err.code === 'ERR_NETWORK') {
+        setError('Cannot reach server. Please check your connection.');
+      } else {
+        setError(err.response?.data?.message || 'Failed to send code. Please check your email and try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleReset = async () => {
+    if (!code.trim() || code.length < 6) {
+      setError('Please enter the full 6-digit code.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       await authService.resetPassword({ email, code, newPassword });
       setSuccess(true);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid or expired code');
+      if (err.code === 'ERR_NETWORK') {
+        setError('Cannot reach server. Please check your connection.');
+      } else {
+        setError(err.response?.data?.message || 'Invalid or expired code. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -76,6 +100,12 @@ export default function ForgotPasswordScreen() {
             </View>
           )}
 
+          {codeSent && step === 2 && (
+            <View style={styles.successBanner}>
+              <Text style={styles.successBannerText}>Code sent to {email}</Text>
+            </View>
+          )}
+
           {step === 1 ? (
             <>
               <Input
@@ -109,13 +139,15 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flexGrow: 1, padding: 24 },
   back: { marginBottom: 16 },
-  backText: { fontSize: 16, color: colors.primary },
-  heading: { fontSize: 22, fontWeight: '600', color: colors.textPrimary, marginBottom: 8 },
-  subtitle: { fontSize: 15, color: colors.textSecondary, marginBottom: 24, lineHeight: 22 },
-  errorBanner: { backgroundColor: '#FEE2E2', padding: 12, borderRadius: 8, marginBottom: 16 },
-  errorText: { color: colors.danger, fontSize: 14, textAlign: 'center' },
+  backText: { ...typography.bodyMedium, color: colors.primary },
+  heading: { ...typography.headingLarge, color: colors.textPrimary, marginBottom: 8 },
+  subtitle: { ...typography.bodyMedium, color: colors.textSecondary, marginBottom: 24, lineHeight: 22 },
+  errorBanner: { backgroundColor: '#FEE2E2', padding: 12, borderRadius: 14, marginBottom: 16 },
+  errorText: { ...typography.bodySmall, color: colors.danger, textAlign: 'center' },
   gap: { height: 16 },
-  hint: { fontSize: 13, color: colors.textHint, marginTop: 4 },
+  hint: { ...typography.bodySmall, color: colors.textHint, marginTop: 4 },
   successContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   successIcon: { fontSize: 48, color: colors.success, marginBottom: 16 },
+  successBanner: { backgroundColor: '#DCFCE7', padding: 12, borderRadius: 14, marginBottom: 16 },
+  successBannerText: { ...typography.bodySmall, color: '#166534', textAlign: 'center' },
 });

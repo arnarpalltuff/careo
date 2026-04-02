@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { CircleRole } from '@prisma/client';
+import { CircleRole } from '@careo/shared';
 import { prisma } from '../utils/prisma';
 
 export function circleAccess(requiredRoles: CircleRole[]) {
@@ -21,14 +21,14 @@ export function circleAccess(requiredRoles: CircleRole[]) {
       return;
     }
 
-    if (!requiredRoles.includes(member.role)) {
+    if (!requiredRoles.includes(member.role as CircleRole)) {
       res.status(403).json({ error: 'Insufficient permissions' });
       return;
     }
 
     req.circleMember = {
       id: member.id,
-      role: member.role,
+      role: member.role as CircleRole,
       userId: member.userId,
       circleId: member.circleId,
     };

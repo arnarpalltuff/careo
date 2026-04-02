@@ -1,8 +1,26 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '../constants/config';
 import { useAuthStore } from '../stores/authStore';
 import { router } from 'expo-router';
+
+const tokenStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+      return AsyncStorage.getItem(key);
+    }
+    const SecureStore = require('expo-secure-store');
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      return AsyncStorage.setItem(key, value);
+    }
+    const SecureStore = require('expo-secure-store');
+    return SecureStore.setItemAsync(key, value);
+  },
+};
 
 const api = axios.create({
   baseURL: config.API_URL,
@@ -55,7 +73,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = await SecureStore.getItemAsync('refreshToken');
+        const refreshToken = await tokenStorage.getItem('refreshToken');
         if (!refreshToken) {
           throw new Error('No refresh token');
         }
@@ -64,7 +82,7 @@ api.interceptors.response.use(
 
         const { setAccessToken } = useAuthStore.getState();
         setAccessToken(data.accessToken);
-        await SecureStore.setItemAsync('refreshToken', data.refreshToken);
+        await tokenStorage.setItem('refreshToken', data.refreshToken);
 
         processQueue(null, data.accessToken);
 

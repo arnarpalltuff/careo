@@ -1,4 +1,4 @@
-import { CircleRole } from '@prisma/client';
+import { CircleRole, SubscriptionTier, TIER_LIMITS } from '@careo/shared';
 import { prisma } from '../utils/prisma';
 import { sendEmail } from '../utils/email';
 import { AppError } from '../types';
@@ -14,9 +14,10 @@ export async function createCircle(
   const adminCircleCount = await prisma.circleMember.count({
     where: { userId, role: 'ADMIN' },
   });
-  const limit = user.subscriptionTier === 'FAMILY' ? 5 : 1;
+  const tier = (user.subscriptionTier || 'FREE') as SubscriptionTier;
+  const limit = TIER_LIMITS[tier].circles;
   if (adminCircleCount >= limit) {
-    throw new AppError(403, 'upgrade_required', `Upgrade to Family to create more circles. Limit: ${limit}`);
+    throw new AppError(403, 'upgrade_required', `You've reached your ${tier} plan limit of ${limit} circle${limit === 1 ? '' : 's'}. Upgrade to create more.`);
   }
 
   const circle = await prisma.careCircle.create({
@@ -74,13 +75,14 @@ export async function getCircleDetail(circleId: string) {
 
 export async function updateCircle(
   circleId: string,
-  data: { name?: string; careRecipient?: string; recipientDob?: string; recipientPhoto?: string }
+  data: { name?: string; careRecipient?: string; recipientDob?: string; recipientPhoto?: string; healthCard?: string }
 ) {
+  const { recipientDob, ...rest } = data;
   return prisma.careCircle.update({
     where: { id: circleId },
     data: {
-      ...data,
-      recipientDob: data.recipientDob ? new Date(data.recipientDob) : undefined,
+      ...rest,
+      recipientDob: recipientDob ? new Date(recipientDob) : undefined,
     },
   });
 }
@@ -100,11 +102,16 @@ export async function inviteMember(
   });
   if (!circle) throw new AppError(404, 'not_found', 'Circle not found');
 
-  // Check member limit
-  const inviter = await prisma.user.findUnique({ where: { id: inviterUserId } });
-  const memberLimit = inviter?.subscriptionTier === 'FAMILY' ? 15 : 3;
+  // Check member limit against circle admin's subscription tier (not inviter's)
+  const admin = await prisma.circleMember.findFirst({
+    where: { circleId, role: 'ADMIN' },
+    include: { user: true },
+    orderBy: { joinedAt: 'asc' },
+  });
+  const tier = (admin?.user.subscriptionTier || 'FREE') as SubscriptionTier;
+  const memberLimit = TIER_LIMITS[tier].members;
   if (circle._count.members >= memberLimit) {
-    throw new AppError(403, 'upgrade_required', `Member limit reached. Limit: ${memberLimit}`);
+    throw new AppError(403, 'upgrade_required', `You've reached your ${tier} plan limit of ${memberLimit} members. Upgrade to invite more.`);
   }
 
   // Check if already a member
@@ -127,11 +134,11 @@ export async function inviteMember(
     },
   });
 
-  const appUrl = process.env.APP_URL || 'https://elderlink.app';
+  const appUrl = process.env.APP_URL || 'https://careo.app';
   await sendEmail(
     data.email,
-    `You're invited to ${circle.name} on ElderLink`,
-    `<p>You've been invited to join <strong>${circle.name}</strong> on ElderLink.</p>
+    `You're invited to ${circle.name} on Careo`,
+    `<p>You've been invited to join <strong>${circle.name}</strong> on Careo.</p>
      <p><a href="${appUrl}/circles/join/${invite.token}">Click here to join</a></p>
      <p>This invitation expires in 7 days.</p>`
   );
@@ -186,6 +193,19 @@ export async function joinCircle(token: string, userId: string) {
 }
 
 export async function updateMemberRole(circleId: string, memberId: string, role: CircleRole) {
+  const member = await prisma.circleMember.findUnique({ where: { id: memberId, circleId } });
+  if (!member) throw new AppError(404, 'not_found', 'Member not found');
+
+  // Prevent demoting the last admin
+  if (member.role === 'ADMIN' && role !== 'ADMIN') {
+    const adminCount = await prisma.circleMember.count({
+      where: { circleId, role: 'ADMIN' },
+    });
+    if (adminCount <= 1) {
+      throw new AppError(400, 'last_admin', 'Cannot demote the last admin. Promote another member first.');
+    }
+  }
+
   return prisma.circleMember.update({
     where: { id: memberId, circleId },
     data: { role },
@@ -196,8 +216,18 @@ export async function updateMemberRole(circleId: string, memberId: string, role:
 }
 
 export async function removeMember(circleId: string, memberId: string, requesterId: string) {
-  const member = await prisma.circleMember.findUnique({ where: { id: memberId } });
+  const member = await prisma.circleMember.findUnique({ where: { id: memberId, circleId } });
   if (!member) throw new AppError(404, 'not_found', 'Member not found');
+
+  // Only admins can remove others; members can only remove themselves
+  if (member.userId !== requesterId) {
+    const requester = await prisma.circleMember.findUnique({
+      where: { userId_circleId: { userId: requesterId, circleId } },
+    });
+    if (!requester || requester.role !== 'ADMIN') {
+      throw new AppError(403, 'forbidden', 'Only admins can remove other members');
+    }
+  }
 
   // Prevent last admin from leaving
   if (member.role === 'ADMIN') {

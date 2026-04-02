@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Linking, Platform } from 'react-native';
 import { Stack } from 'expo-router';
-import * as DocumentPicker from 'expo-document-picker';
 import { colors } from '../../utils/colors';
+import { typography } from '../../utils/fonts';
 import { useCircleStore } from '../../stores/circleStore';
 import { documentService } from '../../services/documents';
 import { Badge } from '../../components/ui/Badge';
@@ -38,9 +38,28 @@ export default function DocumentsScreen() {
   const handleUpload = async () => {
     if (!activeCircleId) return;
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
-      if (result.canceled) return;
-      const file = result.assets[0];
+      let file: { name: string; uri: string; mimeType: string | undefined; size: number | undefined };
+
+      if (Platform.OS === 'web') {
+        const picked = await new Promise<{ name: string; uri: string; mimeType: string; size: number } | null>((resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.onchange = () => {
+            const f = input.files?.[0];
+            if (!f) { resolve(null); return; }
+            resolve({ name: f.name, uri: URL.createObjectURL(f), mimeType: f.type, size: f.size });
+          };
+          input.click();
+        });
+        if (!picked) return;
+        file = picked;
+      } else {
+        const DocumentPicker = require('expo-document-picker');
+        const result = await DocumentPicker.getDocumentAsync({ type: '*/*' });
+        if (result.canceled) return;
+        const asset = result.assets[0];
+        file = { name: asset.name, uri: asset.uri, mimeType: asset.mimeType, size: asset.size };
+      }
 
       // Pick category
       const category = await new Promise<string>((resolve) => {
@@ -82,8 +101,12 @@ export default function DocumentsScreen() {
 
   const handleDownload = async (docId: string) => {
     if (!activeCircleId) return;
-    const { downloadUrl } = await documentService.getDownloadUrl(activeCircleId, docId);
-    Linking.openURL(downloadUrl);
+    try {
+      const { downloadUrl } = await documentService.getDownloadUrl(activeCircleId, docId);
+      Linking.openURL(downloadUrl);
+    } catch {
+      Alert.alert('Error', 'Failed to download document. Please try again.');
+    }
   };
 
   const handleDelete = (docId: string) => {
@@ -139,20 +162,39 @@ export default function DocumentsScreen() {
             onPress={handleUpload}
           />
         ) : (
+          <>
+          <View style={styles.countRow}>
+            <Text style={styles.countText}>{documents.length} document{documents.length !== 1 ? 's' : ''}</Text>
+          </View>
           <FlatList
             data={documents}
             keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.docList}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.docRow} onPress={() => handleDownload(item.id)} onLongPress={() => handleDelete(item.id)}>
-                <Text style={styles.docIcon}>{item.mimeType.includes('image') ? '🖼' : item.mimeType.includes('pdf') ? '📄' : '📎'}</Text>
-                <View style={styles.docInfo}>
-                  <Text style={styles.docName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.docMeta}>{formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}</Text>
+              <View style={styles.docCard}>
+                <TouchableOpacity style={styles.docCardTop} onPress={() => handleDownload(item.id)} activeOpacity={0.7}>
+                  <Text style={styles.docIcon}>{item.mimeType.includes('image') ? '🖼' : item.mimeType.includes('pdf') ? '📄' : '📎'}</Text>
+                  <View style={styles.docInfo}>
+                    <Text style={styles.docName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.docMeta}>{formatSize(item.sizeBytes)} · {formatDate(item.createdAt)}</Text>
+                    {item.uploadedBy && (
+                      <Text style={styles.docUploader}>by {item.uploadedBy.firstName} {item.uploadedBy.lastName}</Text>
+                    )}
+                  </View>
+                  <Badge label={item.category} />
+                </TouchableOpacity>
+                <View style={styles.docActions}>
+                  <TouchableOpacity style={styles.docActionBtn} onPress={() => handleDownload(item.id)}>
+                    <Text style={styles.docActionText}>Download</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.docActionBtnDanger} onPress={() => handleDelete(item.id)}>
+                    <Text style={styles.docActionTextDanger}>Delete</Text>
+                  </TouchableOpacity>
                 </View>
-                <Badge label={item.category} />
-              </TouchableOpacity>
+              </View>
             )}
           />
+          </>
         )}
       </View>
     </>
@@ -164,11 +206,29 @@ const styles = StyleSheet.create({
   categories: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 6 },
   catPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   catPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  catText: { fontSize: 12, color: colors.textSecondary },
+  catText: { ...typography.labelSmall, color: colors.textSecondary },
   catTextActive: { color: '#fff', fontWeight: '600' },
-  docRow: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  countRow: { paddingHorizontal: 16, paddingBottom: 8 },
+  countText: { ...typography.labelSmall, color: colors.textHint },
+  docList: { paddingHorizontal: 12, paddingBottom: 20 },
+  docCard: {
+    backgroundColor: '#fff', borderRadius: 16, marginBottom: 10,
+    borderWidth: 1, borderColor: colors.divider, overflow: 'hidden',
+  },
+  docCardTop: { flexDirection: 'row', alignItems: 'center', padding: 14 },
   docIcon: { fontSize: 28, marginRight: 12 },
   docInfo: { flex: 1 },
-  docName: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
-  docMeta: { fontSize: 12, color: colors.textHint, marginTop: 2 },
+  docName: { ...typography.headingSmall, color: colors.textPrimary },
+  docMeta: { ...typography.labelSmall, color: colors.textHint, marginTop: 2 },
+  docUploader: { ...typography.labelSmall, color: colors.textHint, marginTop: 1, fontSize: 10 },
+  docActions: {
+    flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.divider,
+  },
+  docActionBtn: {
+    flex: 1, paddingVertical: 10, alignItems: 'center',
+    borderRightWidth: 1, borderRightColor: colors.divider,
+  },
+  docActionBtnDanger: { flex: 1, paddingVertical: 10, alignItems: 'center' },
+  docActionText: { ...typography.labelSmall, color: colors.primary, fontWeight: '600' },
+  docActionTextDanger: { ...typography.labelSmall, color: colors.danger, fontWeight: '600' },
 });

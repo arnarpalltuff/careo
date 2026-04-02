@@ -1,12 +1,40 @@
 import { create } from 'zustand';
-import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Use AsyncStorage on web, SecureStore on native
+const storage = {
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+      return AsyncStorage.getItem(key);
+    }
+    const SecureStore = require('expo-secure-store');
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      await AsyncStorage.setItem(key, value);
+      return;
+    }
+    const SecureStore = require('expo-secure-store');
+    await SecureStore.setItemAsync(key, value);
+  },
+  deleteItem: async (key: string): Promise<void> => {
+    if (Platform.OS === 'web') {
+      await AsyncStorage.removeItem(key);
+      return;
+    }
+    const SecureStore = require('expo-secure-store');
+    await SecureStore.deleteItemAsync(key);
+  },
+};
 
 interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
-  subscriptionTier: 'FREE' | 'FAMILY';
+  subscriptionTier: 'FREE' | 'PLUS' | 'FAMILY';
   avatarUrl?: string;
   phone?: string;
   timezone?: string;
@@ -32,12 +60,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   setAuth: async (user, accessToken, refreshToken) => {
-    await SecureStore.setItemAsync('refreshToken', refreshToken);
+    await storage.setItem('refreshToken', refreshToken);
     set({ user, accessToken, isAuthenticated: true, isLoading: false });
   },
 
   clearAuth: async () => {
-    await SecureStore.deleteItemAsync('refreshToken');
+    await storage.deleteItem('refreshToken');
     set({ user: null, accessToken: null, isAuthenticated: false, isLoading: false });
   },
 
@@ -47,8 +75,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   hydrate: async () => {
     try {
-      const refreshToken = await SecureStore.getItemAsync('refreshToken');
-      return refreshToken;
+      return await storage.getItem('refreshToken');
     } catch {
       return null;
     }

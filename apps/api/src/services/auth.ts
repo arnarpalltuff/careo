@@ -110,8 +110,8 @@ export async function refreshTokens(refreshToken: string) {
   return { accessToken, refreshToken: newRefreshToken };
 }
 
-export async function logoutUser(refreshToken: string) {
-  await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+export async function logoutUser(refreshToken: string, userId: string) {
+  await prisma.refreshToken.deleteMany({ where: { token: refreshToken, userId } });
 }
 
 export async function forgotPassword(email: string) {
@@ -131,7 +131,7 @@ export async function forgotPassword(email: string) {
   if (user) {
     await sendEmail(
       email,
-      'Your ElderLink reset code',
+      'Your Careo reset code',
       `<p>Your password reset code is: <strong>${code}</strong></p><p>This code expires in 15 minutes.</p>`
     );
   }
@@ -175,7 +175,6 @@ export async function getMe(userId: string) {
       avatarUrl: true,
       timezone: true,
       subscriptionTier: true,
-      stripeCustomerId: true,
       createdAt: true,
     },
   });

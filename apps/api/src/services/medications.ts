@@ -1,4 +1,4 @@
-import { MedLogStatus } from '@prisma/client';
+import { MedLogStatus } from '@careo/shared';
 import { prisma } from '../utils/prisma';
 import { AppError } from '../types';
 

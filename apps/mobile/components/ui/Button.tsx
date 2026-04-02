@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
 import { colors } from '../../utils/colors';
+import { typography } from '../../utils/fonts';
 
 interface ButtonProps {
   title: string;
@@ -9,9 +10,10 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
+  accessibilityLabel?: string;
 }
 
-export function Button({ title, onPress, variant = 'primary', loading, disabled, style }: ButtonProps) {
+export function Button({ title, onPress, variant = 'primary', loading, disabled, style, accessibilityLabel }: ButtonProps) {
   const isDisabled = disabled || loading;
 
   const buttonStyles: ViewStyle[] = [styles.base];
@@ -43,7 +45,9 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
       style={[...buttonStyles, style]}
       onPress={onPress}
       disabled={isDisabled}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || title}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' || variant === 'danger' ? '#fff' : colors.primary} />
@@ -56,19 +60,23 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
+    minHeight: 52,
   },
   text: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.button,
   },
   primary: {
     backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryText: {
     color: '#FFFFFF',
@@ -83,6 +91,11 @@ const styles = StyleSheet.create({
   },
   danger: {
     backgroundColor: colors.danger,
+    shadowColor: colors.danger,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   ghost: {
     backgroundColor: 'transparent',

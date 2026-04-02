@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { taskService } from '../services/tasks';
 import { useCircleStore } from '../stores/circleStore';
+import { isDemoMode, DEMO_TASKS } from '../utils/demoData';
 
 export function useTasks() {
   const [tasks, setTasks] = useState<any[]>([]);
@@ -11,6 +12,14 @@ export function useTasks() {
   const fetchTasks = useCallback(
     async (params?: { status?: string; assignedTo?: string; page?: number }) => {
       if (!activeCircleId) return;
+      if (isDemoMode()) {
+        const filtered = params?.status
+          ? DEMO_TASKS.filter((t) => t.status === params.status)
+          : DEMO_TASKS;
+        setTasks(filtered);
+        setTotal(filtered.length);
+        return;
+      }
       setLoading(true);
       try {
         const data = await taskService.list(activeCircleId, params);
